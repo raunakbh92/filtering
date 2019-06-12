@@ -21,12 +21,6 @@ function obs_func(x::Array{Float64,2},obs::Float64)
 	return y
 end
 
-# Compute the sum of absolute diff between approx and obs functions at samples
-	# samples: vector representation of functions by querying at samples
-function func_diff_sum(obs_func::Array{Float64,2},approx_func::Array{Float64,2})
-	return sum(abs.(obs_func-approx_func))
-end
-
 # Generate particles
 # Every column is a different particle
 # Every row is a different sample from the function
@@ -39,29 +33,32 @@ function generate_particles(samples::Array{Float64,2},means::Array,
 	selection = collect(range(0,stop=1,length=11)) # Specify 0,0.1,...,1.0 as possible coeffs
 
 	particle_set = zeros(size(x,1),num_particles) # Each column is a diff particle
-
+	coeff_set = zeros(n,num_particles)
 	for i in 1:num_particles
 		coeffs = rand(selection,n)
+		coeff_set[:,i] = coeffs
 		y = approx_func(x,coeffs,means,stddevs)
 		particle_set[:,i] = y
 	end
-	return particle_set
+	return particle_set,coeff_set
 end
 
 # resample
 	#XXX needs statsbase to work `weights` and `sample` methods
-function resample(samples::Array{Float64,2},p_set::Array{Float64,2},obs::Float64)
+function resample(samples::Array{Float64,2},p_set::Array{Float64,2},
+			coeff_set::Array{Float64,2},obs::Float64)
 	obs_vec = obs_func(samples,obs)
 	# XXX Need to think about this divide 1 over sumofdiff	
 		# Rationale is that more the diff, worse the particle
-	sum_of_diffs = sum(abs.(p_set .- obs_vec),dims=1) # Returns a 1xnum_particles array
+	sum_of_diffs = 1 ./ sum(abs.(p_set .- obs_vec),dims=1) # Returns a 1xnum_particles array
 
 	particle_weights = weights(sum_of_diffs./sum(sum_of_diffs))
 	
 	num_p = size(p_set,2)	
 	idx = sample(1:num_p,particle_weights,num_p)
 	new_particle_set = p_set[:,idx]
-	return new_particle_set
+	new_coeff_set = coeff_set[:,idx]
+	return new_particle_set, new_coeff_set
 end
 
 function make_gif(plots)

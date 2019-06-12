@@ -7,24 +7,29 @@ using Reel
 include("burgard_pf.jl")
 
 @testset "generate_particles" begin
-	x = collect(range(0,stop=200,length=400))[:,:]
+	num_samples = 400
+	num_particles = 100
+	x = collect(range(0,stop=200,length=num_samples))[:,:]
 	means = [0,40,80,120,160,200]
 	stddevs = [10,10,10,10,10,10]
-	p_set = generate_particles(x,means,stddevs,100)
-	@test size(p_set,1) == 400
-	@test size(p_set,2) == 100
+	p_set,c_set = generate_particles(x,means,stddevs,num_particles)
+	@test size(p_set) == (num_samples,num_particles)
+	@test size(c_set) == (length(means),num_particles)
+	#display(c_set)
 	plots = []
 	plt0 = plot(x,p_set,leg=false)
 	push!(plots,plt0)
 
 	# Give same observation for n_step steps and see what happens
 	for i in 1:50
-		new_p_set = resample(x,p_set,101.)
+		new_p_set,new_c_set = resample(x,p_set,c_set,101.)
 		plt = plot(x,new_p_set,leg=false)
 		push!(plots,plt)
 		p_set = new_p_set
+		c_set = new_c_set
 	end
 	make_gif(plots)
+	#display(c_set)
 end
 
 """
