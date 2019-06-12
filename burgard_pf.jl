@@ -1,10 +1,13 @@
 # Approximate a function using gaussian basis function
-function approx_func(x::Array{Float64,2},weights::Array,
+# coeffs used not to confuse with the weights function used from StatsBase
+function approx_func(x::Array{Float64,2},coeffs::Array,
 			means::Array,stddevs::Array)
+	@assert length(means) == length(stddevs)	
 	y = zeros(size(x))
+	scale = 15.0 #XXX Ask Ransalu about this
 	# Loop over all the basis functions	
 	for i in 1:length(means)
-		y = y+weights[i]*pdf.(Normal(means[i],stddevs[i]),x)
+		y = y+scale*coeffs[i]*pdf.(Normal(means[i],stddevs[i]),x)
 	end
 	return y
 end
@@ -18,48 +21,55 @@ function obs_func(x::Array{Float64,2},obs::Float64)
 	return y
 end
 
-"""
-Create the particles. Called it sample specifically to highlight
-the reason why resample is called resample and not just plain sample. 
-The first time, we sample particles when we create our array of particles.
-All subsequent is thus called resampling
-"""
-function sample_particles(num_particles::Int,num_cells::Int)
-	particles = []	
+# Compute the sum of absolute diff between approx and obs functions at samples
+	# samples: vector representation of functions by querying at samples
+function func_diff_sum(obs_func::Array{Float64,2},approx_func::Array{Float64,2})
+	return sum(abs.(obs_func-approx_func))
+end
+
+# Generate particles
+# Every column is a different particle
+# Every row is a different sample from the function
+### XXX: Need to figure out how to enforce that impossible functions dont pollute us
+	# Example: Negative value of function not allowed
+function generate_particles(samples::Array{Float64,2},means::Array,
+			stddevs::Array,num_particles::Int64)
+	x = samples # Because changed name to samples later	
+	n = length(means)
+	selection = collect(range(0,stop=1,length=11)) # Specify 0,0.1,...,1.0 as possible coeffs
+
+	particle_set = zeros(size(x,1),num_particles) # Each column is a diff particle
+
 	for i in 1:num_particles
-		push!(particles,rand(num_cells))
+		coeffs = rand(selection,n)
+		y = approx_func(x,coeffs,means,stddevs)
+		particle_set[:,i] = y
 	end
-	return particles
+	return particle_set
 end
 
-"""
-Inverse sensor model
-z is the measurement in terms of distance from robot (who is assumed to be fixed at org)
-c is the distance from robot
-"""
-function log_inv_sensor_model(z,c)
-	if c > z
-		# Wall detected for this cell		
-		return log(0.6)
-	else
-		# Free space detected for this cell		
-		return log(0.3)
-	end
-end # End the inverse sensor model
+# resample
+	#XXX needs statsbase to work `weights` and `sample` methods
+function resample(samples::Array{Float64,2},p_set::Array{Float64,2},obs::Float64)
+	obs_vec = obs_func(samples,obs)
+	# XXX Need to think about this divide 1 over sumofdiff	
+		# Rationale is that more the diff, worse the particle
+	sum_of_diffs = sum(abs.(p_set .- obs_vec),dims=1) # Returns a 1xnum_particles array
 
-"""
-log prob of occupancy of map represened by particle given measurement
-A particle is a vector of 10 elements with each element 
-correspond to prob of cell being occupied
-"""
-function weight_particle(particle,obs)
-	ll = 0
-	for i in 1:length(particle)
-		ll=ll+log_inv_sensor_model(obs,particle[i])
-	end
-	return ll
+	particle_weights = weights(sum_of_diffs./sum(sum_of_diffs))
+	
+	num_p = size(p_set,2)	
+	idx = sample(1:num_p,particle_weights,num_p)
+	new_particle_set = p_set[:,idx]
+	return new_particle_set
 end
 
-function resample_particles()
-
-end
+function make_gif(plots)
+@show "Making gif"
+	frames = Frames(MIME("image/png"), fps=1)
+	for plt in plots
+	    push!(frames, plt)
+	end
+	write("media/output.mp4", frames)
+	return nothing
+end # End of the reel gif writing function
