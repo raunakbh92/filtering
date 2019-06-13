@@ -6,9 +6,35 @@ using Reel
 
 include("burgard_pf.jl")
 
+@testset "cem" begin
+	num_samples = 800
+	num_particles = 500
+	x = collect(range(0,stop=200,length=num_samples))[:,:]
+	means = [0,40,80,120,160,200]
+	stddevs = [10,10,10,10,10,10]
+	p_set,c_set = generate_particles(x,means,stddevs,num_particles)
+	@test size(p_set) == (num_samples,num_particles)
+	@test size(c_set) == (length(means),num_particles)
+
+	plots = []
+	plt0 = plot(x,p_set,leg=false)
+	push!(plots,plt0)
+
+	# Give same observation for n_step steps and see what happens
+	for i in 1:50
+		new_p_set,new_c_set = resample_cem(x,p_set,c_set,101.0,means,stddevs)
+		plt = plot(x,new_p_set,leg=false)
+		push!(plots,plt)
+		p_set = new_p_set
+		c_set = new_c_set
+	end
+	make_gif(plots,filename = "cem.mp4")
+end
+
+"""
 @testset "generate_particles" begin
-	num_samples = 400
-	num_particles = 100
+	num_samples = 800
+	num_particles = 500
 	x = collect(range(0,stop=200,length=num_samples))[:,:]
 	means = [0,40,80,120,160,200]
 	stddevs = [10,10,10,10,10,10]
@@ -31,6 +57,7 @@ include("burgard_pf.jl")
 	make_gif(plots)
 	#display(c_set)
 end
+"""
 
 """
 @testset "approx_func" begin
